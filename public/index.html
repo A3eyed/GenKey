@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GenKey – Continuous Authentication</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">GenKey</div>
+      <p class="tagline">Continuous · Adaptive · Phishing-resistant</p>
+    </header>
+
+    <main>
+      <!-- Auth Panel -->
+      <section id="auth-panel" class="card">
+        <h2 id="auth-title">Sign in or Register</h2>
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" placeholder="alice" autocomplete="username" />
+        </div>
+        <div class="actions">
+          <button id="btn-register" class="btn primary">Register with Passkey</button>
+          <button id="btn-login" class="btn">Sign in with Passkey</button>
+        </div>
+        <p id="auth-status" class="status"></p>
+      </section>
+
+      <!-- Dashboard (shown when authenticated) -->
+      <section id="dashboard" class="card hidden">
+        <div class="user-bar">
+          <div>
+            <h2>Welcome, <span id="display-name"></span></h2>
+            <p class="muted">Session active · Continuous monitoring enabled</p>
+          </div>
+          <button id="btn-logout" class="btn outline">Logout</button>
+        </div>
+
+        <div class="risk-panel">
+          <h3>Live Risk Score</h3>
+          <div class="score-circle" id="score-circle">
+            <span id="score-value">0</span>
+          </div>
+          <p id="risk-level" class="risk-level low">LOW</p>
+          <ul id="risk-reasons" class="reasons"></ul>
+          <button id="btn-check-risk" class="btn">Force Risk Check</button>
+        </div>
+
+        <div class="stepup-panel hidden" id="stepup-panel">
+          <h3>⚠ Elevated Risk – Step-up Required</h3>
+          <p>Please re-authenticate with your passkey to continue.</p>
+          <button id="btn-stepup" class="btn primary">Verify with Passkey</button>
+        </div>
+
+        <div class="info">
+          <h3>How GenKey works</h3>
+          <ul>
+            <li>Passkey = phishing-resistant cryptographic proof</li>
+            <li>Continuous signals: device fingerprint, IP, timing, behavior</li>
+            <li>Risk score updates in the background</li>
+            <li>Step-up only when risk crosses the threshold</li>
+          </ul>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>GenKey Prototype · Built with WebAuthn + continuous risk engine</p>
+    </footer>
+  </div>
+
+  <script src="https://unpkg.com/@simplewebauthn/browser/dist/bundle/index.umd.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
