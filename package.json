@@ -1,0 +1,21 @@
+{
+  "name": "genkey",
+  "version": "1.0.0",
+  "description": "GenKey - Next-generation continuous, adaptive, phishing-resistant authentication",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "keywords": ["authentication", "passkeys", "webauthn", "mfa", "continuous-auth", "adaptive"],
+  "author": "GenKey",
+  "license": "MIT",
+  "dependencies": {
+    "@simplewebauthn/server": "^13.1.1",
+    "better-sqlite3": "^11.7.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "express-session": "^1.18.1",
+    "uuid": "^11.0.3"
+  }
+}
