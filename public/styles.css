@@ -12,11 +12,7 @@
   --radius: 14px;
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
@@ -24,21 +20,19 @@ body {
   color: var(--text);
   min-height: 100vh;
   line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
 }
 
 .container {
   max-width: 520px;
   margin: 0 auto;
-  padding: 2rem 1.25rem;
+  padding: 1.5rem 1rem 2rem;
 }
 
-header {
-  text-align: center;
-  margin-bottom: 2rem;
-}
+header { text-align: center; margin-bottom: 1.75rem; }
 
 .logo {
-  font-size: 2.4rem;
+  font-size: 2.2rem;
   font-weight: 800;
   letter-spacing: -0.03em;
   background: linear-gradient(135deg, #4f8cff, #a78bfa);
@@ -46,38 +40,23 @@ header {
   -webkit-text-fill-color: transparent;
 }
 
-.tagline {
-  color: var(--muted);
-  font-size: 0.95rem;
-  margin-top: 0.25rem;
-}
+.tagline { color: var(--muted); font-size: 0.9rem; margin-top: 0.3rem; }
 
 .card {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 1.75rem;
-  margin-bottom: 1.5rem;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
-}
-
-.hidden {
-  display: none !important;
-}
-
-h2 {
-  font-size: 1.35rem;
-  margin-bottom: 1rem;
-}
-
-h3 {
-  font-size: 1.05rem;
-  margin-bottom: 0.75rem;
-}
-
-.form-group {
+  padding: 1.5rem;
   margin-bottom: 1.25rem;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.35);
 }
+
+.hidden { display: none !important; }
+
+h2 { font-size: 1.3rem; margin-bottom: 1rem; }
+h3 { font-size: 1.05rem; margin-bottom: 0.75rem; }
+
+.form-group { margin-bottom: 1.1rem; }
 
 label {
   display: block;
@@ -86,9 +65,12 @@ label {
   margin-bottom: 0.35rem;
 }
 
-input {
+.optional { font-weight: 400; opacity: 0.7; }
+
+input[type="text"],
+input[type="password"] {
   width: 100%;
-  padding: 0.75rem 1rem;
+  padding: 0.8rem 1rem;
   border-radius: 10px;
   border: 1px solid var(--border);
   background: #0f1524;
@@ -96,10 +78,28 @@ input {
   font-size: 1rem;
 }
 
-input:focus {
-  outline: none;
-  border-color: var(--primary);
+input:focus { outline: none; border-color: var(--primary); }
+
+.mode-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-bottom: 1.25rem;
+  padding: 0.75rem;
+  background: #0f1524;
+  border-radius: 10px;
+  border: 1px solid var(--border);
 }
+
+.radio {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+
+.radio input { accent-color: var(--primary); width: 18px; height: 18px; }
 
 .actions {
   display: flex;
@@ -108,7 +108,7 @@ input:focus {
 }
 
 .btn {
-  padding: 0.7rem 1.25rem;
+  padding: 0.75rem 1.2rem;
   border-radius: 10px;
   border: none;
   font-size: 0.95rem;
@@ -117,38 +117,24 @@ input:focus {
   background: #243049;
   color: var(--text);
   transition: all 0.15s ease;
+  flex: 1;
+  min-width: 120px;
 }
 
-.btn:hover {
-  background: #2d3b5a;
-}
+.btn:hover { background: #2d3b5a; }
+.btn.primary { background: var(--primary); color: white; }
+.btn.primary:hover { background: var(--primary-hover); }
+.btn.outline { background: transparent; border: 1px solid var(--border); flex: 0; }
 
-.btn.primary {
-  background: var(--primary);
-  color: white;
-}
+.status { margin-top: 1rem; font-size: 0.9rem; color: var(--muted); }
+.status.error { color: var(--danger); }
+.status.success { color: var(--success); }
 
-.btn.primary:hover {
-  background: var(--primary-hover);
-}
-
-.btn.outline {
-  background: transparent;
-  border: 1px solid var(--border);
-}
-
-.status {
+.hint {
   margin-top: 1rem;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   color: var(--muted);
-}
-
-.status.error {
-  color: var(--danger);
-}
-
-.status.success {
-  color: var(--success);
+  text-align: center;
 }
 
 .user-bar {
@@ -156,12 +142,10 @@ input:focus {
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 1.5rem;
+  gap: 1rem;
 }
 
-.muted {
-  color: var(--muted);
-  font-size: 0.9rem;
-}
+.muted { color: var(--muted); font-size: 0.9rem; }
 
 .risk-panel {
   text-align: center;
@@ -215,10 +199,6 @@ input:focus {
   min-height: 1.2em;
 }
 
-.reasons li {
-  margin: 0.2rem 0;
-}
-
 .stepup-panel {
   background: rgba(231, 76, 60, 0.12);
   border: 1px solid rgba(231, 76, 60, 0.35);
@@ -234,13 +214,16 @@ input:focus {
   font-size: 0.9rem;
 }
 
-.info li {
-  margin: 0.35rem 0;
-}
+.info li { margin: 0.4rem 0; }
 
 footer {
   text-align: center;
   color: var(--muted);
   font-size: 0.8rem;
-  margin-top: 2rem;
+  margin-top: 1.5rem;
+}
+
+@media (max-width: 400px) {
+  .actions { flex-direction: column; }
+  .btn { width: 100%; }
 }
