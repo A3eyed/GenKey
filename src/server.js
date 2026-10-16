@@ -14,7 +14,6 @@ const { computeRisk } = require('./risk');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// In production set these properly
 const rpName = 'GenKey';
 const rpID = process.env.RP_ID || 'localhost';
 const origin = process.env.ORIGIN || `http://localhost:${PORT}`;
@@ -30,42 +29,30 @@ app.use(session({
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000 // 24h
+    maxAge: 24 * 60 * 60 * 1000,
+    sameSite: 'lax'
   }
 }));
 
-// Helpers
-function getUserByUsername(username) {
-  return db.prepare('SELECT * FROM users WHERE username = ?').get(username);
-}
-
-function getUserById(id) {
-  return db.prepare('SELECT * FROM users WHERE id = ?').get(id);
-}
-
-function getCredentialsForUser(userId) {
-  return db.prepare('SELECT * FROM credentials WHERE user_id = ?').all(userId);
-}
-
-function getCredentialById(credId) {
-  return db.prepare('SELECT * FROM credentials WHERE credential_id = ?').get(credId);
-}
-
-// ========== Registration ==========
+// ========== Registration (passwordless + classic 2FA) ==========
 app.post('/api/register/options', async (req, res) => {
   try {
-    const { username, displayName } = req.body;
+    const { username, displayName, mode } = req.body;
     if (!username) return res.status(400).json({ error: 'username required' });
 
-    let user = getUserByUsername(username);
+    let user = db.getUserByUsername(username);
     if (!user) {
-      const id = uuidv4();
-      db.prepare('INSERT INTO users (id, username, display_name, created_at) VALUES (?, ?, ?, ?)')
-        .run(id, username, displayName || username, Date.now());
-      user = getUserById(id);
+      user = db.createUser({
+        id: uuidv4(),
+        username,
+        display_name: displayName || username,
+        hasPassword: false,
+        created_at: Date.now()
+      });
     }
 
-    const existingCreds = getCredentialsForUser(user.id);
+    const existingCreds = db.getCredentialsForUser(user.id);
+
     const options = await generateRegistrationOptions({
       rpName,
       rpID,
@@ -80,12 +67,14 @@ app.post('/api/register/options', async (req, res) => {
       authenticatorSelection: {
         residentKey: 'preferred',
         userVerification: 'preferred',
-        authenticatorAttachment: 'platform'
-      }
+        authenticatorAttachment: undefined
+      },
+      extensions: { credProps: true }
     });
 
     req.session.currentChallenge = options.challenge;
     req.session.pendingUserId = user.id;
+    req.session.regMode = mode || 'passwordless';
 
     res.json(options);
   } catch (err) {
@@ -96,9 +85,10 @@ app.post('/api/register/options', async (req, res) => {
 
 app.post('/api/register/verify', async (req, res) => {
   try {
-    const { response } = req.body;
+    const { response, password } = req.body;
     const expectedChallenge = req.session.currentChallenge;
     const userId = req.session.pendingUserId;
+    const mode = req.session.regMode || 'passwordless';
 
     if (!expectedChallenge || !userId) {
       return res.status(400).json({ error: 'No pending registration' });
@@ -118,33 +108,43 @@ app.post('/api/register/verify', async (req, res) => {
     const { credential } = verification.registrationInfo;
     const credId = Buffer.from(credential.id).toString('base64url');
 
-    db.prepare(`
-      INSERT INTO credentials (id, user_id, credential_id, public_key, counter, transports, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      uuidv4(),
-      userId,
-      credId,
-      Buffer.from(credential.publicKey).toString('base64'),
-      credential.counter,
-      JSON.stringify(response.response.transports || []),
-      Date.now()
-    );
+    db.createCredential({
+      id: uuidv4(),
+      user_id: userId,
+      credential_id: credId,
+      public_key: Buffer.from(credential.publicKey).toString('base64'),
+      counter: credential.counter,
+      transports: JSON.stringify(response.response.transports || []),
+      created_at: Date.now()
+    });
 
-    // Create session
+    if (mode === 'classic' && password) {
+      db.setPassword(userId, password);
+    }
+
     const sessionId = uuidv4();
-    db.prepare(`
-      INSERT INTO sessions (id, user_id, risk_score, last_ip, last_device_fp, last_check, created_at)
-      VALUES (?, ?, 0, ?, ?, ?, ?)
-    `).run(sessionId, userId, req.ip, null, Date.now(), Date.now());
+    db.createSession({
+      id: sessionId,
+      user_id: userId,
+      risk_score: 0,
+      last_ip: req.ip,
+      last_device_fp: null,
+      last_check: Date.now(),
+      created_at: Date.now()
+    });
 
     req.session.userId = userId;
     req.session.sessionId = sessionId;
     req.session.currentChallenge = undefined;
     req.session.pendingUserId = undefined;
+    req.session.regMode = undefined;
 
-    const user = getUserById(userId);
-    res.json({ verified: true, user: { id: user.id, username: user.username, displayName: user.display_name } });
+    const user = db.getUserById(userId);
+    res.json({
+      verified: true,
+      mode: user.hasPassword ? 'classic' : 'passwordless',
+      user: { id: user.id, username: user.username, displayName: user.display_name, hasPassword: !!user.hasPassword }
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -157,10 +157,10 @@ app.post('/api/login/options', async (req, res) => {
     const { username } = req.body;
     if (!username) return res.status(400).json({ error: 'username required' });
 
-    const user = getUserByUsername(username);
+    const user = db.getUserByUsername(username);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const creds = getCredentialsForUser(user.id);
+    const creds = db.getCredentialsForUser(user.id);
     if (creds.length === 0) return res.status(400).json({ error: 'No credentials registered' });
 
     const options = await generateAuthenticationOptions({
@@ -175,7 +175,10 @@ app.post('/api/login/options', async (req, res) => {
     req.session.currentChallenge = options.challenge;
     req.session.pendingUserId = user.id;
 
-    res.json(options);
+    res.json({
+      ...options,
+      requiresPassword: !!user.hasPassword
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -184,7 +187,7 @@ app.post('/api/login/options', async (req, res) => {
 
 app.post('/api/login/verify', async (req, res) => {
   try {
-    const { response, deviceFp } = req.body;
+    const { response, deviceFp, password } = req.body;
     const expectedChallenge = req.session.currentChallenge;
     const userId = req.session.pendingUserId;
 
@@ -192,8 +195,16 @@ app.post('/api/login/verify', async (req, res) => {
       return res.status(400).json({ error: 'No pending login' });
     }
 
+    const user = db.getUserById(userId);
+
+    if (user.hasPassword) {
+      if (!password || !db.verifyPassword(userId, password)) {
+        return res.status(401).json({ error: 'Invalid password' });
+      }
+    }
+
     const credId = Buffer.from(response.id, 'base64url').toString('base64url');
-    const dbCred = getCredentialById(credId);
+    const dbCred = db.getCredentialById(credId);
     if (!dbCred || dbCred.user_id !== userId) {
       return res.status(400).json({ error: 'Credential not found' });
     }
@@ -215,27 +226,29 @@ app.post('/api/login/verify', async (req, res) => {
       return res.status(400).json({ error: 'Verification failed' });
     }
 
-    // Update counter
-    db.prepare('UPDATE credentials SET counter = ? WHERE id = ?')
-      .run(verification.authenticationInfo.newCounter, dbCred.id);
+    db.updateCredentialCounter(dbCred.id, verification.authenticationInfo.newCounter);
 
-    // Create / update session
     const sessionId = uuidv4();
     const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
-    db.prepare(`
-      INSERT INTO sessions (id, user_id, risk_score, last_ip, last_device_fp, last_check, created_at)
-      VALUES (?, ?, 0, ?, ?, ?, ?)
-    `).run(sessionId, userId, ip, deviceFp || null, Date.now(), Date.now());
+    db.createSession({
+      id: sessionId,
+      user_id: userId,
+      risk_score: 0,
+      last_ip: ip,
+      last_device_fp: deviceFp || null,
+      last_check: Date.now(),
+      created_at: Date.now()
+    });
 
     req.session.userId = userId;
     req.session.sessionId = sessionId;
     req.session.currentChallenge = undefined;
     req.session.pendingUserId = undefined;
 
-    const user = getUserById(userId);
     res.json({
       verified: true,
-      user: { id: user.id, username: user.username, displayName: user.display_name },
+      mode: user.hasPassword ? 'classic' : 'passwordless',
+      user: { id: user.id, username: user.username, displayName: user.display_name, hasPassword: !!user.hasPassword },
       risk: { score: 0, level: 'low' }
     });
   } catch (err) {
@@ -249,12 +262,13 @@ app.get('/api/session', (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ authenticated: false });
   }
-  const user = getUserById(req.session.userId);
-  const sess = db.prepare('SELECT * FROM sessions WHERE id = ?').get(req.session.sessionId);
+  const user = db.getUserById(req.session.userId);
+  const sess = db.getSession(req.session.sessionId);
 
   res.json({
     authenticated: true,
-    user: user ? { id: user.id, username: user.username, displayName: user.display_name } : null,
+    mode: user && user.hasPassword ? 'classic' : 'passwordless',
+    user: user ? { id: user.id, username: user.username, displayName: user.display_name, hasPassword: !!user.hasPassword } : null,
     risk: sess ? { score: sess.risk_score, lastCheck: sess.last_check } : null
   });
 });
@@ -264,13 +278,13 @@ app.post('/api/risk/check', (req, res) => {
     return res.status(401).json({ error: 'Not authenticated' });
   }
 
-  const sess = db.prepare('SELECT * FROM sessions WHERE id = ?').get(req.session.sessionId);
+  const sess = db.getSession(req.session.sessionId);
   if (!sess) return res.status(401).json({ error: 'Session not found' });
 
   const signals = {
     ip: req.ip || req.headers['x-forwarded-for'] || 'unknown',
     deviceFp: req.body.deviceFp,
-    behaviorScore: req.body.behaviorScore // 0-1 from client
+    behaviorScore: req.body.behaviorScore
   };
 
   const previous = {
@@ -281,11 +295,12 @@ app.post('/api/risk/check', (req, res) => {
 
   const result = computeRisk(signals, previous);
 
-  // Persist
-  db.prepare(`
-    UPDATE sessions SET risk_score = ?, last_ip = ?, last_device_fp = ?, last_check = ?
-    WHERE id = ?
-  `).run(result.score, signals.ip, signals.deviceFp || sess.last_device_fp, Date.now(), sess.id);
+  db.updateSession(sess.id, {
+    risk_score: result.score,
+    last_ip: signals.ip,
+    last_device_fp: signals.deviceFp || sess.last_device_fp,
+    last_check: Date.now()
+  });
 
   res.json(result);
 });
@@ -295,8 +310,8 @@ app.post('/api/stepup/options', async (req, res) => {
   if (!req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
 
   try {
-    const user = getUserById(req.session.userId);
-    const creds = getCredentialsForUser(user.id);
+    const user = db.getUserById(req.session.userId);
+    const creds = db.getCredentialsForUser(user.id);
 
     const options = await generateAuthenticationOptions({
       rpID,
@@ -324,7 +339,7 @@ app.post('/api/stepup/verify', async (req, res) => {
     if (!expectedChallenge) return res.status(400).json({ error: 'No pending step-up' });
 
     const credId = Buffer.from(response.id, 'base64url').toString('base64url');
-    const dbCred = getCredentialById(credId);
+    const dbCred = db.getCredentialById(credId);
     if (!dbCred || dbCred.user_id !== req.session.userId) {
       return res.status(400).json({ error: 'Invalid credential' });
     }
@@ -346,9 +361,10 @@ app.post('/api/stepup/verify', async (req, res) => {
       return res.status(400).json({ error: 'Step-up failed' });
     }
 
-    // Reset risk after successful step-up
-    db.prepare('UPDATE sessions SET risk_score = 0, last_check = ? WHERE id = ?')
-      .run(Date.now(), req.session.sessionId);
+    db.updateSession(req.session.sessionId, {
+      risk_score: 0,
+      last_check: Date.now()
+    });
 
     req.session.currentChallenge = undefined;
     res.json({ verified: true, risk: { score: 0, level: 'low' } });
@@ -360,14 +376,16 @@ app.post('/api/stepup/verify', async (req, res) => {
 
 app.post('/api/logout', (req, res) => {
   if (req.session.sessionId) {
-    db.prepare('DELETE FROM sessions WHERE id = ?').run(req.session.sessionId);
+    db.deleteSession(req.session.sessionId);
   }
   req.session.destroy(() => {
     res.json({ ok: true });
   });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`GenKey running at ${origin}`);
   console.log(`RP ID: ${rpID}`);
+  console.log('Supports: Passwordless multi-factor + Classic 2FA (password + passkey)');
+  console.log('Cross-device: platform + roaming authenticators');
 });
