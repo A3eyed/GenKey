@@ -1,23 +1,27 @@
 # GenKey
 
-**Next-generation continuous, adaptive, phishing-resistant authentication.**
+**Next-generation authentication that works as both classic 2-Step / 2FA and modern passwordless multi-factor — across every device.**
 
-GenKey moves beyond traditional 2FA (SMS, TOTP, push) to a system built on:
+GenKey supports two modes so you can choose the right balance of security and convenience:
 
-- **Passkeys / WebAuthn** – phishing-resistant cryptographic credentials
-- **Continuous risk scoring** – behavioral + contextual signals evaluated throughout the session
-- **Adaptive step-up** – extra verification only when risk is elevated
-- **Low friction** – often invisible on trusted devices and normal behavior
+### Mode 1 – Passwordless (Recommended)
+- Just a passkey (Face ID / fingerprint / PIN / security key)
+- Counts as multi-factor under NIST guidelines
+- Phishing-resistant, lowest friction
+- Works on phone, tablet, laptop, desktop
 
-## Features
+### Mode 2 – Classic 2FA / 2-Step
+- Password + Passkey (or password + authenticator app later)
+- Traditional two different factors
+- Familiar flow for users and enterprises that still require a password
 
-- Passwordless registration and login with platform authenticators (Face ID, Touch ID, Windows Hello, etc.)
-- Device-bound credentials with origin binding
-- Continuous session monitoring endpoint
-- Simple risk engine (device fingerprint, IP change, time-based anomalies, simulated behavioral signals)
-- Automatic step-up challenge when risk exceeds threshold
-- SQLite persistence for users and credentials
-- Clean modern UI
+Both modes include **continuous risk monitoring** after login (device, IP, behavior, timing). High risk automatically triggers a step-up challenge.
+
+## Cross-device support
+- Platform authenticators (iPhone Face ID, Android biometrics, Windows Hello, macOS Touch ID)
+- Roaming authenticators (YubiKey, Titan, etc.)
+- Hybrid transport so you can approve a login on one device from another
+- Works in modern mobile and desktop browsers
 
 ## Quick Start
 
@@ -26,46 +30,18 @@ npm install
 npm start
 ```
 
-Open http://localhost:3000
+Open http://localhost:3000 (or your deployed public URL)
 
-> **Note**: WebAuthn requires a secure context. For local development use `localhost`. In production you need HTTPS and a proper `rpID`.
+1. Choose **Register** → create a passkey (this is already multi-factor)
+2. Or register with a password + passkey for classic 2FA mode
+3. Sign in from any device that has the passkey or can use hybrid flow
 
-## Architecture
-
-```
-Client (browser)
-  ├── Passkey registration / authentication (WebAuthn)
-  ├── Continuous signal collection (device, timing, simple behavioral)
-  └── Risk check calls
-
-Server
-  ├── @simplewebauthn for cryptographic verification
-  ├── Risk engine (score = device + IP + time + behavior)
-  ├── Session store with continuous re-evaluation
-  └── Step-up challenge generation when score is high
-```
-
-## API Overview
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/register/options` | POST | Generate registration options |
-| `/api/register/verify` | POST | Verify registration response |
-| `/api/login/options` | POST | Generate authentication options |
-| `/api/login/verify` | POST | Verify authentication response |
-| `/api/session` | GET | Current session + risk status |
-| `/api/risk/check` | POST | Continuous risk evaluation |
-| `/api/stepup/options` | POST | Generate step-up challenge |
-| `/api/stepup/verify` | POST | Verify step-up |
-
-## Why GenKey over classic 2FA
-
-- Phishing-resistant by design (origin-bound keys)
-- Continuous assurance instead of point-in-time
-- Dramatically lower user friction
-- Resistant to SIM swap, MFA fatigue, and real-time proxy attacks
-- Ready for AI-agent and high-assurance scenarios
+## Why GenKey
+- Works as pure passwordless **or** classic password + second factor
+- Phishing-resistant by design
+- Continuous assurance instead of one-time checks
+- Runs on phones, tablets, and computers
+- Ready for real-world use and further extension (TOTP fallback, hardware keys, enterprise policies)
 
 ## License
-
 MIT
