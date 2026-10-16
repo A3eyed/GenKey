@@ -2,38 +2,55 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GenKey – Continuous Authentication</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>GenKey – 2FA & Continuous Auth</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div class="container">
     <header>
       <div class="logo">GenKey</div>
-      <p class="tagline">Continuous · Adaptive · Phishing-resistant</p>
+      <p class="tagline">Works as 2-Step / 2FA + Passwordless · All devices</p>
     </header>
 
     <main>
-      <!-- Auth Panel -->
       <section id="auth-panel" class="card">
-        <h2 id="auth-title">Sign in or Register</h2>
+        <h2>Sign in or Register</h2>
+
         <div class="form-group">
           <label for="username">Username</label>
           <input type="text" id="username" placeholder="alice" autocomplete="username" />
         </div>
+
+        <div class="form-group" id="password-group">
+          <label for="password">Password <span class="optional">(for classic 2FA mode)</span></label>
+          <input type="password" id="password" placeholder="Optional – leave empty for passwordless" autocomplete="new-password" />
+        </div>
+
+        <div class="mode-toggle">
+          <label class="radio">
+            <input type="radio" name="mode" value="passwordless" checked />
+            <span>Passwordless (recommended)</span>
+          </label>
+          <label class="radio">
+            <input type="radio" name="mode" value="classic" />
+            <span>Classic 2FA (password + passkey)</span>
+          </label>
+        </div>
+
         <div class="actions">
-          <button id="btn-register" class="btn primary">Register with Passkey</button>
-          <button id="btn-login" class="btn">Sign in with Passkey</button>
+          <button id="btn-register" class="btn primary">Register</button>
+          <button id="btn-login" class="btn">Sign in</button>
         </div>
         <p id="auth-status" class="status"></p>
+        <p class="hint">Works on iPhone, Android, Windows, macOS with Face ID / fingerprint / security key</p>
       </section>
 
-      <!-- Dashboard (shown when authenticated) -->
       <section id="dashboard" class="card hidden">
         <div class="user-bar">
           <div>
             <h2>Welcome, <span id="display-name"></span></h2>
-            <p class="muted">Session active · Continuous monitoring enabled</p>
+            <p class="muted">Mode: <span id="auth-mode">—</span> · Continuous monitoring on</p>
           </div>
           <button id="btn-logout" class="btn outline">Logout</button>
         </div>
@@ -50,24 +67,25 @@
 
         <div class="stepup-panel hidden" id="stepup-panel">
           <h3>⚠ Elevated Risk – Step-up Required</h3>
-          <p>Please re-authenticate with your passkey to continue.</p>
+          <p>Please re-authenticate with your passkey.</p>
           <button id="btn-stepup" class="btn primary">Verify with Passkey</button>
         </div>
 
         <div class="info">
-          <h3>How GenKey works</h3>
+          <h3>How GenKey works on all devices</h3>
           <ul>
-            <li>Passkey = phishing-resistant cryptographic proof</li>
-            <li>Continuous signals: device fingerprint, IP, timing, behavior</li>
-            <li>Risk score updates in the background</li>
-            <li>Step-up only when risk crosses the threshold</li>
+            <li><strong>Passwordless</strong> = Passkey alone (already multi-factor)</li>
+            <li><strong>Classic 2FA</strong> = Password + Passkey</li>
+            <li>Phone, tablet, laptop, security key all supported</li>
+            <li>Continuous risk checks after login</li>
+            <li>Step-up only when something looks suspicious</li>
           </ul>
         </div>
       </section>
     </main>
 
     <footer>
-      <p>GenKey Prototype · Built with WebAuthn + continuous risk engine</p>
+      <p>GenKey · 2-Step / 2FA + Continuous Auth · Cross-device</p>
     </footer>
   </div>
 
