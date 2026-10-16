@@ -3,18 +3,23 @@ const { startRegistration, startAuthentication } = SimpleWebAuthnBrowser;
 const authPanel = document.getElementById('auth-panel');
 const dashboard = document.getElementById('dashboard');
 const usernameInput = document.getElementById('username');
+const passwordInput = document.getElementById('password');
 const authStatus = document.getElementById('auth-status');
 const displayName = document.getElementById('display-name');
+const authModeEl = document.getElementById('auth-mode');
 const scoreValue = document.getElementById('score-value');
 const scoreCircle = document.getElementById('score-circle');
 const riskLevel = document.getElementById('risk-level');
 const riskReasons = document.getElementById('risk-reasons');
 const stepupPanel = document.getElementById('stepup-panel');
 
-let currentUser = null;
 let monitoringInterval = null;
 
-// Simple device fingerprint
+function getSelectedMode() {
+  const checked = document.querySelector('input[name="mode"]:checked');
+  return checked ? checked.value : 'passwordless';
+}
+
 function getDeviceFp() {
   const data = [
     navigator.userAgent,
@@ -23,7 +28,6 @@ function getDeviceFp() {
     new Date().getTimezoneOffset(),
     navigator.hardwareConcurrency || 0
   ].join('|');
-  // Basic hash
   let hash = 0;
   for (let i = 0; i < data.length; i++) {
     hash = ((hash << 5) - hash) + data.charCodeAt(i);
@@ -32,10 +36,7 @@ function getDeviceFp() {
   return 'fp_' + Math.abs(hash).toString(16);
 }
 
-// Simulated behavioral score (0 = normal, 1 = highly anomalous)
-// In a real system this would come from typing dynamics, mouse entropy, motion sensors, etc.
 function getBehaviorScore() {
-  // Mostly normal, occasionally inject anomaly for demo purposes
   return Math.random() < 0.08 ? 0.7 + Math.random() * 0.3 : Math.random() * 0.15;
 }
 
@@ -44,16 +45,15 @@ function setStatus(msg, type = '') {
   authStatus.className = 'status ' + type;
 }
 
-function showDashboard(user) {
-  currentUser = user;
+function showDashboard(user, mode) {
   authPanel.classList.add('hidden');
   dashboard.classList.remove('hidden');
   displayName.textContent = user.displayName || user.username;
+  authModeEl.textContent = mode === 'classic' ? 'Classic 2FA (password + passkey)' : 'Passwordless multi-factor';
   startMonitoring();
 }
 
 function showAuth() {
-  currentUser = null;
   dashboard.classList.add('hidden');
   authPanel.classList.remove('hidden');
   stepupPanel.classList.add('hidden');
@@ -65,7 +65,6 @@ function updateRiskUI(result) {
   riskLevel.textContent = result.level.toUpperCase();
   riskLevel.className = 'risk-level ' + result.level;
 
-  // Update circle gradient
   const pct = Math.min(100, result.score);
   let color = '#2ecc71';
   if (result.level === 'medium') color = '#f39c12';
@@ -107,13 +106,17 @@ async function checkRisk() {
 
 function startMonitoring() {
   checkRisk();
-  monitoringInterval = setInterval(checkRisk, 12000); // every 12s
+  monitoringInterval = setInterval(checkRisk, 12000);
 }
 
-// Registration
+// Register
 document.getElementById('btn-register').addEventListener('click', async () => {
   const username = usernameInput.value.trim();
+  const password = passwordInput.value;
+  const mode = getSelectedMode();
+
   if (!username) return setStatus('Enter a username', 'error');
+  if (mode === 'classic' && !password) return setStatus('Classic 2FA mode requires a password', 'error');
 
   setStatus('Creating passkey…');
   try {
@@ -121,7 +124,7 @@ document.getElementById('btn-register').addEventListener('click', async () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ username, displayName: username })
+      body: JSON.stringify({ username, displayName: username, mode })
     });
     const options = await optRes.json();
     if (!optRes.ok) throw new Error(options.error || 'Options failed');
@@ -132,13 +135,13 @@ document.getElementById('btn-register').addEventListener('click', async () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ response: attResp })
+      body: JSON.stringify({ response: attResp, password: mode === 'classic' ? password : undefined })
     });
     const verification = await verRes.json();
     if (!verRes.ok) throw new Error(verification.error || 'Verification failed');
 
     setStatus('Registered successfully!', 'success');
-    showDashboard(verification.user);
+    showDashboard(verification.user, verification.mode);
   } catch (err) {
     console.error(err);
     setStatus(err.message || 'Registration failed', 'error');
@@ -148,6 +151,8 @@ document.getElementById('btn-register').addEventListener('click', async () => {
 // Login
 document.getElementById('btn-login').addEventListener('click', async () => {
   const username = usernameInput.value.trim();
+  const password = passwordInput.value;
+
   if (!username) return setStatus('Enter a username', 'error');
 
   setStatus('Authenticating…');
@@ -161,19 +166,28 @@ document.getElementById('btn-login').addEventListener('click', async () => {
     const options = await optRes.json();
     if (!optRes.ok) throw new Error(options.error || 'Options failed');
 
+    if (options.requiresPassword && !password) {
+      setStatus('This account uses classic 2FA – enter your password', 'error');
+      return;
+    }
+
     const authResp = await startAuthentication({ optionsJSON: options });
 
     const verRes = await fetch('/api/login/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ response: authResp, deviceFp: getDeviceFp() })
+      body: JSON.stringify({
+        response: authResp,
+        deviceFp: getDeviceFp(),
+        password: options.requiresPassword ? password : undefined
+      })
     });
     const verification = await verRes.json();
     if (!verRes.ok) throw new Error(verification.error || 'Verification failed');
 
     setStatus('Signed in!', 'success');
-    showDashboard(verification.user);
+    showDashboard(verification.user, verification.mode);
     if (verification.risk) updateRiskUI(verification.risk);
   } catch (err) {
     console.error(err);
@@ -218,14 +232,20 @@ document.getElementById('btn-logout').addEventListener('click', async () => {
   setStatus('');
 });
 
-// Check existing session on load
+// Restore session
 (async () => {
   try {
     const res = await fetch('/api/session', { credentials: 'include' });
     const data = await res.json();
     if (data.authenticated && data.user) {
-      showDashboard(data.user);
-      if (data.risk) updateRiskUI({ score: data.risk.score, level: data.risk.score >= 60 ? 'high' : data.risk.score >= 30 ? 'medium' : 'low', reasons: [] });
+      showDashboard(data.user, data.mode);
+      if (data.risk) {
+        updateRiskUI({
+          score: data.risk.score,
+          level: data.risk.score >= 60 ? 'high' : data.risk.score >= 30 ? 'medium' : 'low',
+          reasons: []
+        });
+      }
     }
   } catch (e) {}
 })();
